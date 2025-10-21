@@ -1,0 +1,212 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Caso encriptado</title>
+<style>
+    body {
+        margin: 0;
+        height: 100vh;
+        background-color: black;
+        background-image: url('../Assets/bg.jpg'); /* sube un nivel hasta Assets */
+        background-size: cover;
+        background-position: center;
+        background-repeat: no-repeat;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        font-family: 'Courier New', monospace;
+        padding: 10px;
+    }
+
+    .contenedor {
+        background-color: rgba(255, 255, 255, 0.85);
+        padding: 20px;
+        border-radius: 10px;
+        box-shadow: 0 0 15px rgba(0,0,0,0.5);
+        display: flex;
+        flex-direction: row;
+        align-items: center;
+        width: 100%;
+        max-width: 460px;
+    }
+
+    .imagen-container {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        margin-right: 15px;
+    }
+
+    .imagen-container p {
+        margin-bottom: 5px;
+        font-size: 16px;
+        text-align: center;
+        color: #222;
+    }
+
+    .contenedor img {
+        max-width: 100%;
+        height: auto;
+        border: 2px solid #333;
+    }
+
+    .info {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+    }
+
+    .info p {
+        font-size: 16px;
+        color: #222;
+        margin-bottom: 10px;
+        text-align: center;
+    }
+
+    input {
+        width: 100%;
+        padding: 10px;
+        border: 2px solid #444;
+        border-radius: 5px;
+        text-align: center;
+        font-size: 18px;
+        background-color: #f8f8f8;
+        box-sizing: border-box;
+    }
+
+    button {
+        margin-top: 10px;
+        padding: 10px 20px;
+        background-color: #333;
+        color: white;
+        border: none;
+        border-radius: 5px;
+        cursor: pointer;
+        width: 100%;
+    }
+
+    button:hover {
+        background-color: #555;
+    }
+
+    .mensaje {
+        margin-top: 10px;
+        font-weight: bold;
+        color: #b00;
+        text-align: center;
+    }
+
+    @media (max-width: 480px) {
+        .contenedor {
+            flex-direction: column;
+            padding: 12px;
+            max-width: 320px;
+            border-radius: 8px;
+        }
+
+        .imagen-container {
+            margin-right: 0;
+            margin-bottom: 10px;
+        }
+
+        .contenedor img {
+            max-width: 70%;
+        }
+
+        .info p {
+            font-size: 14px;
+        }
+
+        input {
+            font-size: 16px;
+            padding: 8px;
+        }
+
+        button {
+            padding: 8px;
+            font-size: 16px;
+        }
+    }
+</style>
+</head>
+<body>
+<div class="contenedor">
+    <div class="imagen-container">
+        <p id="texto-arriba">El código está en:</p>
+        <img src="Pista1.jpg" alt="Foto del caso"> <!-- La imagen debe estar en la misma carpeta -->
+    </div>
+    <div class="info">
+        <p>Ingrese el código escondido para continuar con la investigación.</p>
+        <input type="text" id="codigo" placeholder="Ingrese el código">
+        <button onclick="verificarCodigo()">Verificar</button>
+        <div id="mensaje" class="mensaje"></div>
+    </div>
+</div>
+
+<script>
+async function verificarCodigo() {
+    const input = document.getElementById("codigo").value.trim();
+    const mensaje = document.getElementById("mensaje");
+
+    try {
+        const response = await fetch('secret.json'); // secret.json en la misma carpeta
+        if (!response.ok) throw new Error("No se pudo cargar el secret.json");
+
+        const secretData = await response.json();
+
+        const keyMaterial = await crypto.subtle.importKey(
+            "raw",
+            new TextEncoder().encode("MiClaveSuperSecreta"), // misma clave usada en encrypt.html
+            "PBKDF2",
+            false,
+            ["deriveKey"]
+        );
+
+        const key = await crypto.subtle.deriveKey(
+            {
+                name: "PBKDF2",
+                salt: Uint8Array.from(atob(secretData.salt), c => c.charCodeAt(0)),
+                iterations: secretData.iterations,
+                hash: "SHA-256"
+            },
+            keyMaterial,
+            {name: "AES-GCM", length: 256},
+            true,
+            ["decrypt"]
+        );
+
+        const decrypted = await crypto.subtle.decrypt(
+            {
+                name: "AES-GCM",
+                iv: Uint8Array.from(atob(secretData.iv), c => c.charCodeAt(0))
+            },
+            key,
+            Uint8Array.from(atob(secretData.ciphertext), c => c.charCodeAt(0))
+        );
+
+        const decoder = new TextDecoder();
+        const codigoCorrecto = decoder.decode(decrypted);
+
+        if (input === codigoCorrecto) {
+            mensaje.style.color = "green";
+            mensaje.textContent = "Código correcto. Redirigiendo...";
+            // redirige al result de la misma carpeta
+            setTimeout(() => { window.location.href = "result.html"; }, 1000);
+        } else {
+            mensaje.style.color = "red";
+            mensaje.textContent = "Código incorrecto. Intente nuevamente.";
+        }
+
+    } catch (e) {
+        mensaje.style.color = "red";
+        mensaje.textContent = "Error al cargar la pista cifrada (secret.json).";
+        console.error(e);
+    }
+}
+</script>
+</body>
+</html>
